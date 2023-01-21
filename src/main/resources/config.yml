@@ -1,0 +1,27 @@
+gameplay:
+  # The maximum amount of hunters at any one time.
+  max-hunters: 5
+  # How many lives does the prey
+  prey-lives: 3
+  # Any blocks on this list cannot be placed or broken
+  block-blacklist:
+    - RESPAWN_ANCHOR
+    - BED
+    - TNT
+  # Which items are blacklisted from being used. Adding flint and steel to this list
+  # will mean flint and steel cannot be used UNLESS on obsidian
+  item-blacklist:
+    - LAVA_BUCKET
+    - FLINT_AND_STEEL
+  # What spawn range do hunters spawn at in relation to the prey
+  hunter-spawn-range: 2500
+queue:
+  prey-role: 'owner'
+  # Which discord roles are considered priority and are placed at the front of the queue behind other paid members.
+  priority-roles:
+    - supporter
+    - friend
+  # When a position becomes available, how much time before the confirmation is timed out. This setting is in seconds
+  confirm-timeout: 15
+
+  

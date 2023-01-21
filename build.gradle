@@ -1,0 +1,158 @@
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+
+plugins {
+    id 'java-library'
+    id 'pmd'
+    id 'net.minecrell.plugin-yml.bukkit' version '0.5.1'
+    id 'dev.s7a.gradle.minecraft.server' version '2.0.0'
+}
+
+group = 'com.ravingarinc.manhunt'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    gradlePluginPortal()
+    mavenCentral()
+
+    maven {
+        name = 'spigotmc-repo'
+        url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
+    }
+    maven {
+        name = 'sonatype'
+        url = 'https://oss.sonatype.org/content/groups/public/'
+    }
+}
+
+dependencies {
+    implementation 'org.jetbrains:annotations:23.1.0'
+    compileOnly 'org.spigotmc:spigot-api:1.18.2-R0.1-SNAPSHOT'
+    compileOnly 'net.luckperms:api:5.4'
+    testImplementation 'org.jetbrains:annotations:23.1.0'
+}
+
+def targetJavaVersion = 17
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+        options.release = targetJavaVersion
+    }
+}
+/*
+tasks.register("launch", LaunchMinecraftServerTask)  {
+    dependsOn("build")
+    serverDirectory = project.layout.projectDirectory.dir("../../Desktop/Programming/Server")
+
+    doFirst {
+        copy {
+            from(buildDir.resolve("libs/${project.name}.jar"))
+            into("${serverDirectory}/plugins")
+        }
+    }
+    jarUrl = LaunchMinecraftServerTask.JarUrl.Paper("1.18.2")
+    agreeEula = true
+
+    jvmArguments = ['-Xmx2G', '-Xms2G']
+}*/
+
+tasks.register("copyToDev", Copy) {
+    from jar
+    into project.layout.projectDirectory.dir("../../Desktop/Programming/Server/plugins")
+}
+
+jar.finalizedBy copyToDev
+
+javadoc {
+    options.encoding 'UTF-8'
+    options.charSet 'UTF-8'
+    options.jFlags('-Xms256m', '-Xmx512m')
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.links(
+            'https://hub.spigotmc.org/javadocs/spigot/',
+            'http://google.github.io/guava/releases/17.0/api/docs/'
+    )
+}
+
+pmd {
+    consoleOutput = true
+    toolVersion = '6.41.0'
+    rulesMinimumPriority = 5
+    ruleSets = []
+    ruleSetFiles = files('pmd-rules.xml')
+}
+
+int nTests = 0
+
+test {
+    useJUnitPlatform()
+    // Ensure testing is never 'up-to-date' (in Gradle-speak), which means it can never be skipped,
+    // as it would otherwise be.
+    outputs.upToDateWhen { false }
+
+    // Ensure we get all the useful test output.
+    testLogging {
+        events 'failed', 'passed', 'skipped'
+        showExceptions true
+        showCauses true
+        showStackTraces true
+        showStandardStreams true
+        exceptionFormat TestExceptionFormat.FULL
+    }
+    // Count the number of tests actually executed, for later...
+    afterTest {
+        nTests += 1
+    }
+}
+
+// This ensures we actually get an error message if there are no tests found. Otherwise, Gradle
+// wouldn't consider this an error, and will simply report "BUILD SUCCESSFUL".
+task(verifyTestExistence) {
+    dependsOn test
+    doLast {
+        if(nTests == 0)
+        {
+            println("No tests found!\nMake sure your test code is in the same directory as 'unittest', "
+                    + "and uses '@RunWith' and '@Test' as required by JUnit.")
+            throw new InvalidUserDataException("No tests found")
+        }
+    }
+}
+
+bukkit {
+    // Default values can be overridden if needed
+    // name = 'TestPlugin'
+    // version = '1.0'
+    // description = 'This is a test plugin'
+    // website = 'https://example.com'
+    // author = 'Notch'
+
+    name = 'ManhuntPlugin'
+    version = project.version
+    description = 'Custom manhunt plugin'
+    main = 'com.ravingarinc.manhunt.ManhuntPlugin'
+
+    // API version (should be set for 1.13+)
+    apiVersion = '1.18'
+
+    // Other possible properties from plugin.yml (optional)
+    author = 'RAVINGAR'
+    depend = []
+    defaultPermission = 'FALSE' // 'TRUE', 'FALSE', 'OP' or 'NOT_OP'
+
+    commands {
+        manhunt {
+            description = 'Parent command for template plugin'
+            aliases = ['mh']
+            usage = '/manhunt'
+            permission = 'manhunt.admin'
+        }
+    }
+}
