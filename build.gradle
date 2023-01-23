@@ -144,15 +144,14 @@ bukkit {
 
     // Other possible properties from plugin.yml (optional)
     author = 'RAVINGAR'
-    depend = []
-    defaultPermission = 'FALSE' // 'TRUE', 'FALSE', 'OP' or 'NOT_OP'
+    depend = ['LuckPerms']
+    defaultPermission = 'TRUE' // 'TRUE', 'FALSE', 'OP' or 'NOT_OP'
 
     commands {
         manhunt {
-            description = 'Parent command for template plugin'
+            description = 'Parent command for manhunt plugin'
             aliases = ['mh']
             usage = '/manhunt'
-            permission = 'manhunt.admin'
         }
     }
 }

@@ -1,48 +1,133 @@
 package com.ravingarinc.manhunt.command;
 
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 
 public class CommandOption {
-    private final BiFunction<CommandSender, String[], Boolean> function;
+    protected final String identifier;
     private final Map<String, CommandOption> options;
-
     private final int requiredArgs;
     private final CommandOption parent;
-
+    private final @Nullable String permission;
+    private final String description;
+    private BiFunction<CommandSender, String[], Boolean> function;
     private BiFunction<CommandSender, String[], List<String>> tabCompletions;
 
-    public CommandOption(final CommandOption parent, final int requiredArgs, final BiFunction<CommandSender, String[], Boolean> function) {
+    /**
+     * Adds an option for this command. An option can have sub-options since this method returns the command option
+     * created.
+     *
+     * @param identifier   The key of the option
+     * @param parent       The parent of this. Can be null.
+     * @param permission   The required permission to use and show this command
+     * @param description  The description/usage of this command.
+     * @param requiredArgs When {@link #execute(CommandSender, String[], int)} is called, if the number of string arguments
+     *                     is greater than or equal to the {@link #requiredArgs} of this option, only then will it search
+     *                     for sub-options OR execute its function.
+     * @param function     The function to execute. This should in most cases return true. If it returns false, this is
+     *                     interpreted that the arguments provided was incorrect and so this option's description will be sent.
+     * @return The new command option that was just created.
+     */
+    public CommandOption(final String identifier, final CommandOption parent, final @Nullable String permission, final @NotNull String description, final int requiredArgs, final BiFunction<CommandSender, String[], Boolean> function) {
+        this.identifier = identifier;
         this.parent = parent;
         this.function = function;
         this.options = new LinkedHashMap<>();
         this.tabCompletions = null;
         this.requiredArgs = requiredArgs;
+        this.permission = permission;
+        this.description = description;
     }
 
-    /**
-     * Adds an option for this command. An option can have suboptions since this method returns the command option
-     * created.
-     *
-     * @param key          The key of the option
-     * @param requiredArgs args.length must be greater than or equal to this number to search for sub options in this option.
-     * @param function     The function to execute
-     * @return The new command option
-     */
+    public void register() {
+        parent.addOption(identifier, this);
+    }
+
+    public void setFunction(final BiFunction<CommandSender, String[], Boolean> function) {
+        this.function = function;
+    }
+
     public CommandOption addOption(final String key, final int requiredArgs, final BiFunction<CommandSender, String[], Boolean> function) {
-        final CommandOption option = new CommandOption(this, requiredArgs, function);
+        return addOption(key, null, "", requiredArgs, function);
+    }
+
+    public CommandOption addOption(final String key, final String description, final int requiredArgs, final BiFunction<CommandSender, String[], Boolean> function) {
+        return addOption(key, null, description, requiredArgs, function);
+    }
+
+    public CommandOption addOption(final String key, final @Nullable String permission, final String description, final int requiredArgs, final BiFunction<CommandSender, String[], Boolean> function) {
+        final CommandOption option = new CommandOption(key, this, permission, description, requiredArgs, function);
         this.options.put(key, option);
         return option;
     }
 
+    public CommandOption addOption(final String key, final CommandOption option) {
+        this.options.put(key, option);
+        return option;
+    }
+
+    public void addHelpOption(final ChatColor primary, final ChatColor secondary) {
+        final CommandOption option = new CommandOption("?", this, null,
+                "Shows a list of sub-commands for this command.", requiredArgs,
+                (sender, args) -> {
+                    getSubOptionHelp(sender, primary, secondary).forEach(sender::sendMessage);
+                    return true;
+                });
+        this.options.put("?", option);
+    }
+
     public CommandOption getParent() {
         return parent;
+    }
+
+    public String getHelp(final ChatColor prefix) {
+        return prefix + "/" +
+                getIdentifiers() +
+                ChatColor.GRAY +
+                "- " +
+                description;
+    }
+
+    /**
+     * Formats the command by getting parent identifiers forming the full command in a string with spaces. The string
+     * will always end with a trailing space.
+     *
+     * @return The command.
+     */
+    public String getIdentifiers() {
+        final LinkedList<String> paths = new LinkedList<>();
+        paths.add(identifier);
+        CommandOption parent = this.parent;
+        while (parent != null) {
+            paths.addFirst(parent.identifier);
+            parent = parent.getParent();
+        }
+        final StringBuilder builder = new StringBuilder();
+        paths.forEach(p -> builder.append(p).append(" "));
+        return builder.toString();
+    }
+
+    public List<String> getSubOptionHelp(final CommandSender sender, final ChatColor primary, final ChatColor secondary) {
+        final List<String> list = new LinkedList<>();
+        options.values().forEach(option -> {
+            if (!option.identifier.equals("?") && option.hasPermission(sender)) {
+                list.add(option.getHelp(secondary));
+            }
+        });
+        if (!options.isEmpty()) {
+            final String formatted = Character.toUpperCase(identifier.charAt(0)) + identifier.substring(1);
+            list.add(0, ChatColor.GRAY + "------- " + primary + formatted + ChatColor.GRAY + "-------");
+        }
+        return list;
     }
 
     /**
@@ -53,6 +138,13 @@ public class CommandOption {
     public CommandOption buildTabCompletions(final BiFunction<CommandSender, String[], List<String>> tabCompletions) {
         this.tabCompletions = tabCompletions;
         return this;
+    }
+
+    public boolean hasPermission(final CommandSender sender) {
+        if (permission == null) {
+            return true;
+        }
+        return sender.hasPermission(permission);
     }
 
 
@@ -68,12 +160,20 @@ public class CommandOption {
         if (args.length >= requiredArgs) {
             final CommandOption option = args.length == index ? null : options.get(args[index].toLowerCase());
             if (option == null) {
-                return function.apply(sender, args);
+                if (!function.apply(sender, args)) {
+                    sender.sendMessage(ChatColor.GRAY + "Unknown sub-command | " + getHelp(ChatColor.GRAY));
+                }
+                return true;
             } else {
-                return option.execute(sender, args, index + 1);
+                if (option.hasPermission(sender)) {
+                    return option.execute(sender, args, index + 1);
+                }
+                sender.sendMessage(ChatColor.RED + "You do not have permission to use that command!");
+                return true;
             }
         }
-        return false;
+        sender.sendMessage(ChatColor.GRAY + "Invalid arguments! Use /" + getIdentifiers() + "? to show all available commands.");
+        return true;
     }
 
     @Nullable
@@ -82,7 +182,9 @@ public class CommandOption {
             if (args.length == index + 1) {
                 return options.isEmpty()
                         ? null
-                        : options.keySet().stream().toList();
+                        : options.entrySet().stream()
+                        .filter((entry) -> entry.getValue().hasPermission(sender))
+                        .map(Map.Entry::getKey).collect(Collectors.toList());
             } else {
                 final CommandOption option = options.get(args[index]);
                 if (option != null) {

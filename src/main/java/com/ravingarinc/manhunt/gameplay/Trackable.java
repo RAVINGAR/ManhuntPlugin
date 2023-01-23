@@ -1,22 +1,21 @@
 package com.ravingarinc.manhunt.gameplay;
 
-import com.ravingarinc.manhunt.queue.QueueManager;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public abstract class Trackable {
     private final Player player;
     private final Map<Class<? extends Event>, Boolean> eventHandlers;
-    private String role;
-    private long lastAttempt;
 
-    public Trackable(final Player player, final String role) {
+    private long startTime;
+
+    public Trackable(final Player player) {
         this.player = player;
-        this.role = role;
-        this.lastAttempt = 0;
+        this.startTime = -1;
         this.eventHandlers = new HashMap<>();
     }
 
@@ -24,30 +23,40 @@ public abstract class Trackable {
         eventHandlers.put(clazz, shouldCancel);
     }
 
-    public void updateRole(final String newRole) {
-        this.role = newRole;
-    }
-
     public Player player() {
         return player;
     }
 
-    public String role() {
-        return role;
+
+    public void start() {
+        startTime = System.currentTimeMillis();
     }
 
-    /**
-     * Gets the last hunter attempt of this trackable. A value of 0 means the hunter
-     * has never had an attempt.
-     *
-     * @return The system time
-     */
-    public long lastAttempt() {
-        return lastAttempt;
+    public void end() {
+        startTime = -1;
     }
 
-    public void setLastAttempt(final long attempt) {
-        this.lastAttempt = attempt;
+    public String getTimeAlive() {
+        if (startTime == -1) {
+            return "0 seconds";
+        } else {
+            final long diff = System.currentTimeMillis() - startTime;
+            final long minutes = TimeUnit.MILLISECONDS.toMinutes(diff);
+            final long seconds = TimeUnit.MILLISECONDS.toSeconds(diff);
+
+            final StringBuilder builder = new StringBuilder();
+            if (minutes > 0) {
+                builder.append(" ");
+                builder.append(minutes);
+                builder.append(minutes == 1 ? " minute" : " minutes");
+            }
+            if (seconds > 0) {
+                builder.append(minutes > 0 ? ", " : " ");
+                builder.append(seconds);
+                builder.append(seconds == 1 ? " second" : " seconds");
+            }
+            return builder.toString();
+        }
     }
 
     /**
@@ -60,8 +69,6 @@ public abstract class Trackable {
         final Boolean result = eventHandlers.get(event.getClass());
         return result != null && result;
     }
-
-    public abstract void handleDeath(QueueManager manager);
 
     @Override
     public boolean equals(final Object o) {

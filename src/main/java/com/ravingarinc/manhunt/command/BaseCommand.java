@@ -1,5 +1,6 @@
 package com.ravingarinc.manhunt.command;
 
+import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -14,9 +15,13 @@ import java.util.Objects;
 public class BaseCommand extends CommandOption implements CommandExecutor {
     private final String identifier;
 
-    public BaseCommand(final String identifier) {
-        super(null, 1, (p, s) -> false);
+    public BaseCommand(final String identifier, final String permission) {
+        super(identifier, null, permission, "", 1, (p, s) -> false);
         this.identifier = identifier;
+    }
+
+    public BaseCommand(final String identifier) {
+        this(identifier, null);
     }
 
     public void register(final JavaPlugin plugin) {
@@ -28,7 +33,11 @@ public class BaseCommand extends CommandOption implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull final CommandSender sender, @NotNull final Command command, @NotNull final String label, @NotNull final String[] args) {
-        return execute(sender, args, 0);
+        if (hasPermission(sender)) {
+            return execute(sender, args, 0);
+        }
+        sender.sendMessage(ChatColor.RED + "You do not have permission to use this command!");
+        return true;
     }
 
     public static class CommandCompleter implements TabCompleter {

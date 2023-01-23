@@ -1,12 +1,12 @@
 package com.ravingarinc.manhunt;
 
-import com.ravingarinc.manhunt.command.ParentCommand;
+import com.ravingarinc.manhunt.command.ManhuntCommand;
 import com.ravingarinc.manhunt.gameplay.PlayerListener;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
+import com.ravingarinc.manhunt.queue.GameplayManager;
 import com.ravingarinc.manhunt.queue.QueueManager;
 import com.ravingarinc.manhunt.role.LuckPermsHandler;
 import com.ravingarinc.manhunt.storage.ConfigManager;
-import com.ravingarinc.manhunt.storage.sql.PlayerDatabase;
 
 public final class ManhuntPlugin extends RavinPlugin {
     @Override
@@ -15,9 +15,9 @@ public final class ManhuntPlugin extends RavinPlugin {
         // add managers
         addModule(ConfigManager.class);
         addModule(LuckPermsHandler.class);
-        addModule(PlayerDatabase.class);
         addModule(PlayerManager.class);
         addModule(QueueManager.class);
+        addModule(GameplayManager.class);
         addModule(PlayerListener.class);
         //addModule(SQLHandler.class); // comment out if not needed
         // add listeners
@@ -26,6 +26,6 @@ public final class ManhuntPlugin extends RavinPlugin {
 
     @Override
     public void loadCommands() {
-        new ParentCommand(this).register(this);
+        new ManhuntCommand(this).register(this);
     }
 }

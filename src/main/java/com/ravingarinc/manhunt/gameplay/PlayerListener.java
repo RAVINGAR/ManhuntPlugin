@@ -3,7 +3,7 @@ package com.ravingarinc.manhunt.gameplay;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.ModuleListener;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
-import com.ravingarinc.manhunt.queue.QueueManager;
+import com.ravingarinc.manhunt.queue.GameplayManager;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -13,6 +13,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.HashSet;
@@ -23,10 +24,10 @@ public class PlayerListener extends ModuleListener {
     private final Set<Material> itemBlacklist;
     private PlayerManager manager;
 
-    private QueueManager queueManager;
+    private GameplayManager gameplayManager;
 
     public PlayerListener(final RavinPlugin plugin) {
-        super(PlayerListener.class, plugin, PlayerManager.class, QueueManager.class);
+        super(PlayerListener.class, plugin, PlayerManager.class, GameplayManager.class);
         this.blockBlacklist = new HashSet<>();
         this.itemBlacklist = new HashSet<>();
     }
@@ -42,7 +43,7 @@ public class PlayerListener extends ModuleListener {
     @Override
     protected void load() throws ModuleLoadException {
         manager = plugin.getModule(PlayerManager.class);
-        queueManager = plugin.getModule(QueueManager.class);
+        gameplayManager = plugin.getModule(GameplayManager.class);
         super.load();
     }
 
@@ -56,10 +57,16 @@ public class PlayerListener extends ModuleListener {
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
         manager.loadPlayer(event.getPlayer());
+        manager.getPlayer(event.getPlayer()).ifPresent(trackable -> {
+            gameplayManager.tryJoin(trackable);
+        });
     }
 
     @EventHandler
     public void onPlayerLeave(final PlayerQuitEvent event) {
+        manager.getPlayer(event.getPlayer()).ifPresent(trackable -> {
+            gameplayManager.onRemoval(trackable, true);
+        });
         manager.unloadPlayer(event.getPlayer());
     }
 
@@ -101,6 +108,11 @@ public class PlayerListener extends ModuleListener {
 
     @EventHandler
     public void onDeath(final PlayerDeathEvent event) {
-        manager.getPlayer(event.getEntity()).ifPresent(player -> player.handleDeath(queueManager));
+        manager.getPlayer(event.getEntity()).ifPresent(player -> gameplayManager.onRemoval(player, false));
+    }
+
+    @EventHandler
+    public void onSpawn(final PlayerRespawnEvent event) {
+        manager.getPlayer(event.getPlayer()).ifPresent(player -> gameplayManager.onSpawn(player));
     }
 }
