@@ -83,12 +83,15 @@ public class LuckPermsHandler extends Module {
         final String role = queryRole(player);
         if (role == null || !priorityRoles.contains(role)) {
             if (preyRole.equalsIgnoreCase(role)) {
+                I.log(Level.WARNING, "Debug -> Loading player as prey!");
                 trackable = new Prey(player, maxLives);
             } else {
+                I.log(Level.WARNING, "Debug -> Loading player as hunter without priority!");
                 trackable = new Hunter(player, false, lastAttempt);
             }
         } else {
             // priority
+            I.log(Level.WARNING, "Debug -> Loading player as hunter with priority!");
             trackable = new Hunter(player, true, lastAttempt);
         }
         return trackable;

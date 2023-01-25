@@ -5,6 +5,7 @@ import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -90,11 +91,7 @@ public class CommandOption {
     }
 
     public String getHelp(final ChatColor prefix) {
-        return prefix + "/" +
-                getIdentifiers() +
-                ChatColor.GRAY +
-                "- " +
-                description;
+        return prefix + "/" + getIdentifiers() + ChatColor.GRAY + " " + description;
     }
 
     /**
@@ -114,6 +111,19 @@ public class CommandOption {
         final StringBuilder builder = new StringBuilder();
         paths.forEach(p -> builder.append(p).append(" "));
         return builder.toString();
+    }
+
+    public String getUsage() {
+        final StringBuilder command = new StringBuilder(getIdentifiers());
+        if (!options.isEmpty()) {
+            command.append("<");
+            final Iterator<String> iterator = options.keySet().iterator();
+            while (iterator.hasNext()) {
+                command.append(iterator.next());
+                command.append(iterator.hasNext() ? "|" : ">");
+            }
+        }
+        return command.toString();
     }
 
     public List<String> getSubOptionHelp(final CommandSender sender, final ChatColor primary, final ChatColor secondary) {
@@ -161,7 +171,7 @@ public class CommandOption {
             final CommandOption option = args.length == index ? null : options.get(args[index].toLowerCase());
             if (option == null) {
                 if (!function.apply(sender, args)) {
-                    sender.sendMessage(ChatColor.GRAY + "Unknown sub-command | " + getHelp(ChatColor.GRAY));
+                    sender.sendMessage(ChatColor.GRAY + "Unknown sub-command | Use /" + getIdentifiers() + "? to show all available commands.");
                 }
                 return true;
             } else {
@@ -172,7 +182,7 @@ public class CommandOption {
                 return true;
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "Invalid arguments! Use /" + getIdentifiers() + "? to show all available commands.");
+        sender.sendMessage(ChatColor.GRAY + "Invalid arguments! Usage | /" + getUsage());
         return true;
     }
 

@@ -7,8 +7,9 @@ import com.ravingarinc.manhunt.queue.GameplayManager;
 import com.ravingarinc.manhunt.queue.QueueCallback;
 import com.ravingarinc.manhunt.queue.QueueManager;
 import org.bukkit.ChatColor;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+
+import java.util.Iterator;
 
 public class ManhuntCommand extends BaseCommand {
 
@@ -20,7 +21,7 @@ public class ManhuntCommand extends BaseCommand {
         final QueueManager queue = plugin.getModule(QueueManager.class);
 
         addOption("admin", "manhunt.admin", "", 2, (sender, args) -> false)
-                .addOption("reload", "Reloads the configuration and all modules", 2, (player, args) -> {
+                .addOption("reload", "- Reloads the configuration and all modules", 2, (player, args) -> {
                     plugin.reload();
                     player.sendMessage(ChatColor.GRAY + "Plugin has been reloaded..");
                     return true;
@@ -31,25 +32,44 @@ public class ManhuntCommand extends BaseCommand {
                             manager.startQueue();
                             return true;
                         }).getParent()
-                .addOption("stop-queue", "Stops the queue, meaning if any hunters die, they will not be replaced", 2, (sender, args) -> {
+                .addOption("stop-queue", "- Stops the queue, meaning if any hunters die, they will not be replaced", 2, (sender, args) -> {
                     manager.stopQueue();
                     return true;
                 }).getParent()
                 .addOption("tp-prey",
-                        "Teleports all prey to the configured spawn location. " +
+                        "- Teleports all prey to the configured spawn location. " +
                                 "This teleports them regardless of where they are on the server.", 2, (sender, args) -> {
                             manager.teleportPrey();
                             return true;
                         }).getParent()
                 .addOption("clear-hunters",
-                        "Any current hunters are teleported to the spawn location of the specified spawn world. " +
+                        "- Any current hunters are teleported to the spawn location of the specified spawn world. " +
                                 "The inventories of these hunters are also cleared.", 2, (sender, args) -> {
                             manager.clearHunters();
                             return true;
-                        });
+                        }).getParent()
+                .addOption("list", "- List all waiting players in the queue.", 2, (sender, args) -> {
+                    sender.sendMessage(ChatColor.GRAY + "------- " + ChatColor.DARK_RED + "Players in Queue" + ChatColor.GRAY + "-------");
+                    final StringBuilder builder = new StringBuilder();
+                    final Iterator<String> iterator = queue.getNamesInQueue().iterator();
+                    if (iterator.hasNext()) {
+                        builder.append(ChatColor.RED).append("Current Players | ").append(ChatColor.GRAY);
+                        while (iterator.hasNext()) {
+                            builder.append(iterator.next());
+                            if (iterator.hasNext()) {
+                                builder.append(", ");
+                            }
+                        }
+                    } else {
+                        builder.append(ChatColor.RED).append("There are currently no players in the queue!");
+                    }
+                    sender.sendMessage(builder.toString());
+                    return true;
+                }).getParent()
+                .addHelpOption(ChatColor.DARK_RED, ChatColor.RED);
 
         addOption("join-queue", null,
-                "Join the queue if you are not already in the queue.", 1, (sender, args) -> {
+                "- Join the queue if you are not already in the queue.", 1, (sender, args) -> {
                     if (sender instanceof Player player) {
                         playerManager.getPlayer(player).ifPresent(t -> {
                             if (t instanceof Hunter hunter) {
@@ -75,7 +95,7 @@ public class ManhuntCommand extends BaseCommand {
                 });
 
         addOption("leave-queue", null,
-                "Leave the queue and therefore not be considered if a new position for a hunter arises.", 1, (sender, args) -> {
+                "- Leave the queue and therefore not be considered if a new position for a hunter arises.", 1, (sender, args) -> {
                     if (sender instanceof Player player) {
                         plugin.getModule(PlayerManager.class).getPlayer(player).ifPresent(t -> {
                             if (t instanceof Hunter hunter) {
@@ -122,16 +142,7 @@ public class ManhuntCommand extends BaseCommand {
             }
             return true;
         });
-    }
 
-    private void sendHelp(final CommandSender sender) {
-        sender.sendMessage(ChatColor.GRAY + "------" + ChatColor.DARK_RED + " Manhunt Command Help " + ChatColor.GRAY + "------");
-        sender.sendMessage(ChatColor.RED + "/mh reload" + ChatColor.GRAY + " - Reloads the plugin with a new configuration. This does not clear the current queue nor restart any ongoing 'game'.");
-        sender.sendMessage(ChatColor.RED + "/mh tp-prey" + ChatColor.GRAY + " - Teleports all prey to the spawn location, even if they are already in the world. This is generally used initially before a world 'starts'");
-        sender.sendMessage(ChatColor.RED + "/mh force-tp-hunter" + ChatColor.GRAY + " - Teleports a hunter to a valid spawn location. This command will only work is the hunter is currently queued and if the max hunters is not reached.");
-        sender.sendMessage(ChatColor.RED + "/mh start-queue" + ChatColor.GRAY + " - Starts/resumes the queue, if there are any hunter slots available then they will be filled.");
-        sender.sendMessage(ChatColor.RED + "/mh stop-queue" + ChatColor.GRAY + " - Stops the queue, meaning if any hunters die, they will not be replaced");
-        sender.sendMessage(ChatColor.RED + "/mh clear-hunters" + ChatColor.GRAY + " - All current hunters will be teleported to spawn and have their items cleared.");
-        sender.sendMessage(ChatColor.RED + "/mh auto-decline" + ChatColor.GRAY + " - Use this command to toggle auto-decline if you reach the start of the queue. This is useful for spectators.");
+        addHelpOption(ChatColor.DARK_RED, ChatColor.RED);
     }
 }

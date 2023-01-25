@@ -16,8 +16,10 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitScheduler;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -139,6 +141,12 @@ public class QueueManager extends Module {
         final FutureTask<Location> future = new FutureTask<>(() -> findSuitableLocation(origin.getWorld(), origin.getBlockX(), origin.getBlockZ(), minSpawnRange, maxSpawnRange));
         scheduler.runTask(plugin, future);
         this.addCallback(hunter, origin, future);
+    }
+
+    public List<String> getNamesInQueue() {
+        final List<String> names = new ArrayList<>();
+        queue.forEach(hunter -> names.add(hunter.player().getName()));
+        return names;
     }
 
     public int callbackSize() {
