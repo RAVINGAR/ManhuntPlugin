@@ -47,7 +47,7 @@ public class ConfigManager extends Module {
                 gameplayManager.setWorld(world);
             });
             wrap("max-hunters", child::getInt).ifPresent(gameplayManager::setMaxHunters);
-            wrap("prey-lives", child::getInt).ifPresent(v -> plugin.getModule(LuckPermsHandler.class).setMaxLives(v));
+            wrap("prey-lives", child::getInt).ifPresent(gameplayManager::setMaxLives);
             wrap("hunter-min-spawn-range", child::getInt).ifPresent(queueManager::setMinSpawnRange);
             wrap("hunter-max-spawn-range", child::getInt).ifPresent(queueManager::setMaxSpawnRange);
             wrap("block-blacklist", child::getStringList).ifPresent(v -> {
@@ -88,6 +88,7 @@ public class ConfigManager extends Module {
             wrap("prey-role", child::getString).ifPresent(manager::setPreyRole);
             wrap("confirm-timeout", child::getInt).ifPresent(queueManager::setConfirmTimeout);
             wrap("priority-roles", child::getStringList).ifPresent(v -> v.forEach(manager::addPriorityRole));
+            wrap("auto-teleport-new-prey", child::getBoolean).ifPresent(gameplayManager::setTeleportNewPrey);
             wrap("cooldown", child::getString).ifPresent(v -> {
                 final Matcher matcher = numberMatcher.matcher(v);
                 if (!matcher.find()) {

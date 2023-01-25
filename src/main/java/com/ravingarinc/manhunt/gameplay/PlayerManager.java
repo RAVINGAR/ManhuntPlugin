@@ -3,6 +3,8 @@ package com.ravingarinc.manhunt.gameplay;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
+import com.ravingarinc.manhunt.queue.GameplayManager;
+import com.ravingarinc.manhunt.queue.QueueManager;
 import com.ravingarinc.manhunt.role.LuckPermsHandler;
 import org.bukkit.entity.Player;
 
@@ -18,6 +20,10 @@ public class PlayerManager extends Module {
 
     private LuckPermsHandler handler;
 
+    private GameplayManager gameplayManager;
+
+    private QueueManager queue;
+
     public PlayerManager(final RavinPlugin plugin) {
         super(PlayerManager.class, plugin, LuckPermsHandler.class);
         this.trackables = new ConcurrentHashMap<>();
@@ -26,13 +32,18 @@ public class PlayerManager extends Module {
     @Override
     protected void load() throws ModuleLoadException {
         handler = plugin.getModule(LuckPermsHandler.class);
+        gameplayManager = plugin.getModule(GameplayManager.class);
+        queue = plugin.getModule(QueueManager.class);
         for (final Player player : plugin.getServer().getOnlinePlayers()) {
             loadPlayer(player);
         }
     }
 
     public void loadPlayer(final Player player) {
-        trackables.put(player.getUniqueId(), this.handler.loadPlayer(player));
+        this.handler.loadPlayer(player).ifPresent(trackable -> {
+            trackables.put(player.getUniqueId(), trackable);
+            gameplayManager.tryJoin(trackable);
+        });
     }
 
     public Optional<Trackable> getPlayer(final Player player) {
@@ -51,6 +62,7 @@ public class PlayerManager extends Module {
 
     public void unloadPlayer(final Player player) {
         final Trackable trackable = trackables.get(player.getUniqueId());
+        this.gameplayManager.remove(trackable);
         this.handler.savePlayer(trackable);
         this.trackables.remove(player.getUniqueId());
     }

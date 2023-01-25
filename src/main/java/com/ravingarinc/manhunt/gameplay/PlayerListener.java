@@ -3,6 +3,7 @@ package com.ravingarinc.manhunt.gameplay;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.ModuleListener;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
+import com.ravingarinc.manhunt.api.async.AsyncHandler;
 import com.ravingarinc.manhunt.queue.GameplayManager;
 import org.bukkit.Material;
 import org.bukkit.event.EventHandler;
@@ -56,17 +57,11 @@ public class PlayerListener extends ModuleListener {
 
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
-        manager.loadPlayer(event.getPlayer());
-        manager.getPlayer(event.getPlayer()).ifPresent(trackable -> {
-            gameplayManager.tryJoin(trackable);
-        });
+        AsyncHandler.runSyncTaskLater(() -> manager.loadPlayer(event.getPlayer()), 5L);
     }
 
     @EventHandler
     public void onPlayerLeave(final PlayerQuitEvent event) {
-        manager.getPlayer(event.getPlayer()).ifPresent(trackable -> {
-            gameplayManager.onRemoval(trackable, true);
-        });
         manager.unloadPlayer(event.getPlayer());
     }
 
@@ -108,7 +103,7 @@ public class PlayerListener extends ModuleListener {
 
     @EventHandler
     public void onDeath(final PlayerDeathEvent event) {
-        manager.getPlayer(event.getEntity()).ifPresent(player -> gameplayManager.onRemoval(player, false));
+        manager.getPlayer(event.getEntity()).ifPresent(player -> gameplayManager.onDeath(player));
     }
 
     @EventHandler

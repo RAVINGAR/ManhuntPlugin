@@ -21,8 +21,13 @@ gameplay:
   # The world where all the lobby is present.
   spawn-world-name: 'World'
 queue:
+  # If any prey join that have not played before, automatically teleport them to the given spawn.
+  # Practically speaking, if you reset the LuckPerms database, then the plugin will assume that any prey that join
+  # will have not played the server before and therefore will teleport them to the spawn.
+  auto-teleport-new-prey: true
+  # The LuckPerm role which says a player is a 'prey'
   prey-role: 'owner'
-  # Which discord roles are considered priority and are placed at the front of the queue behind other paid members.
+  # The LuckPerms roles which gives priority status to Hunters
   priority-roles:
     - supporter
     - friend

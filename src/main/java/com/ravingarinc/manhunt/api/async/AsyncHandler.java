@@ -67,4 +67,8 @@ public class AsyncHandler {
     public static <V> void applySynchronously(final V value, final Consumer<V> consumer) {
         scheduler.scheduleSyncDelayedTask(plugin, () -> consumer.accept(value));
     }
+
+    public static void runSyncTaskLater(final Runnable runnable, final long delay) {
+        scheduler.runTaskLater(plugin, runnable, delay);
+    }
 }

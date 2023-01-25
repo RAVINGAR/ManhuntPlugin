@@ -11,11 +11,15 @@ public class Prey extends Trackable {
         this.lives = lives;
     }
 
-    public int getLives() {
+    public synchronized int getLives() {
         return lives;
     }
 
-    public void removeLife() {
+    public synchronized void setLives(final int lives) {
+        this.lives = lives;
+    }
+
+    public synchronized void removeLife() {
         lives--;
     }
 

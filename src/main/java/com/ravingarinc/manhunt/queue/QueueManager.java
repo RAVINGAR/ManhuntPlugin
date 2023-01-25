@@ -104,9 +104,16 @@ public class QueueManager extends Module {
         futureTasks.values().forEach(task -> task.cancel(true));
     }
 
-    public void remove(final Hunter hunter) {
+    public void addIgnore(final Hunter hunter) {
         ignoringHunters.add(hunter);
+    }
+
+    public void remove(final Hunter hunter) {
         queue.remove(hunter);
+    }
+
+    public void removeIgnore(final Hunter hunter) {
+        ignoringHunters.remove(hunter);
     }
 
     public boolean isInQueue(final Hunter hunter) {
@@ -128,7 +135,7 @@ public class QueueManager extends Module {
             queue.addLast(trackable);
         }
         for (int i = 0; i < queue.size(); i++) {
-            queue.get(i).player().sendMessage(ChatColor.DARK_GRAY + "You are now position " + (i + 1) + " out of " + queue.size());
+            queue.get(i).player().sendMessage(ChatColor.GRAY + "You are now position " + (i + 1) + " out of " + queue.size());
         }
     }
 
@@ -177,6 +184,10 @@ public class QueueManager extends Module {
         task.runTaskLater(plugin, confirmTimeout * 20L);
     }
 
+    public boolean hasCallback(final Hunter hunter) {
+        return callbacks.containsKey(hunter.player().getUniqueId());
+    }
+
     @Nullable
     public QueueCallback removeCallback(final Hunter hunter) {
         final UUID uuid = hunter.player().getUniqueId();
@@ -200,10 +211,16 @@ public class QueueManager extends Module {
             } catch (ExecutionException | InterruptedException | TimeoutException e) {
                 I.log(Level.SEVERE, "Could not find suitable spawn location for prey!", e);
             } finally {
-                future.cancel(false);
-                futureTasks.remove(player.getUniqueId());
+                cancelFuture(player.getUniqueId());
             }
         }, 1L);
+    }
+
+    public void cancelFuture(final UUID uuid) {
+        final FutureTask<?> future = futureTasks.remove(uuid);
+        if (future != null) {
+            future.cancel(false);
+        }
     }
 
     private Location findSuitableLocation(final World world, final int x, final int z, final int minRange, final int range) {

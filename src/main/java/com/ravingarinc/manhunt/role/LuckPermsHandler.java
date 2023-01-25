@@ -3,37 +3,109 @@ package com.ravingarinc.manhunt.role;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
+import com.ravingarinc.manhunt.api.async.AsyncHandler;
 import com.ravingarinc.manhunt.api.util.I;
 import com.ravingarinc.manhunt.gameplay.Hunter;
+import com.ravingarinc.manhunt.gameplay.PlayerManager;
 import com.ravingarinc.manhunt.gameplay.Prey;
 import com.ravingarinc.manhunt.gameplay.Trackable;
+import com.ravingarinc.manhunt.queue.QueueManager;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
-import net.luckperms.api.context.ImmutableContextSet;
+import net.luckperms.api.event.EventBus;
+import net.luckperms.api.event.user.track.UserTrackEvent;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.MetaNode;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
-import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.logging.Level;
 
 public class LuckPermsHandler extends Module {
-    private static final String META_KEY = "last_attempt";
+    private static final String ATTEMPT_META = "last_attempt";
+    private static final String NO_PRIORITY_META = "no_priority";
+    private static final String LIVES_META = "lives_left";
     private final List<String> priorityRoles;
+    private final LuckPerms luckPerms;
     private String preyRole = "";
+    private PlayerManager manager = null;
 
-    private int maxLives = 5;
-
-    private LuckPerms luckPerms;
+    private QueueManager queue = null;
 
     public LuckPermsHandler(final RavinPlugin plugin) {
         super(LuckPermsHandler.class, plugin);
         priorityRoles = new ArrayList<>();
+
+        final RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
+        if (provider == null) {
+            luckPerms = null;
+        } else {
+            luckPerms = provider.getProvider();
+
+            final EventBus eventBus = luckPerms.getEventBus();
+
+            eventBus.subscribe(plugin, UserTrackEvent.class, this::onUserRoleChange);
+        }
+    }
+
+    private void onUserRoleChange(final UserTrackEvent event) {
+        final String groupFrom = event.getGroupFrom().orElse(null);
+        final String groupTo = event.getGroupTo().orElse(null);
+
+        if (Objects.equals(groupFrom, groupTo)) {
+            return;
+        }
+        final Player player = Bukkit.getPlayer(event.getUser().getUniqueId());
+        if (player == null) {
+            return;
+        }
+
+        if (groupTo == null) {
+            if (preyRole.equals(groupFrom)) {
+                // only one prey role so must be to no group basically
+                manager.unloadPlayer(player);
+                AsyncHandler.runSyncTaskLater(() -> manager.loadPlayer(player), 5L);
+            } else if (priorityRoles.contains(groupFrom)) {
+                manager.getPlayer(player).ifPresent(trackable -> {
+                    if (trackable instanceof Hunter hunter) {
+                        queue.remove(hunter);
+                        hunter.setPriority(false);
+                        hunter.player().sendMessage(ChatColor.RED + "You no longer have priority as a hunter!");
+                        if (!queue.hasCallback(hunter)) {
+                            queue.enqueue(hunter);
+                        }
+                    }
+                });
+            }
+        } else {
+            if (preyRole.equals(groupTo)) {
+                manager.unloadPlayer(player);
+                AsyncHandler.runSyncTaskLater(() -> manager.loadPlayer(player), 5L);
+            } else if (priorityRoles.contains(groupTo)) {
+                if (preyRole.equals(groupFrom)) {
+                    manager.unloadPlayer(player);
+                    AsyncHandler.runSyncTaskLater(() -> manager.loadPlayer(player), 5L);
+                } else {
+                    manager.getPlayer(player).ifPresent(trackable -> {
+                        if (trackable instanceof Hunter hunter) {
+                            if (!hunter.hasPriority()) {
+                                queue.remove(hunter);
+                                hunter.setPriority(true);
+                                hunter.player().sendMessage(ChatColor.GREEN + "You now have priority as a hunter!");
+                                queue.enqueue(hunter);
+                            }
+                        }
+                    });
+                }
+            }
+        }
     }
 
     public void setPreyRole(final String preyRole) {
@@ -44,9 +116,6 @@ public class LuckPermsHandler extends Module {
         this.priorityRoles.add(role);
     }
 
-    public void setMaxLives(final int lives) {
-        this.maxLives = lives;
-    }
 
     public void clearPriorityRoles() {
         this.priorityRoles.clear();
@@ -54,63 +123,78 @@ public class LuckPermsHandler extends Module {
 
     @Override
     protected void load() throws ModuleLoadException {
-        final RegisteredServiceProvider<LuckPerms> provider = Bukkit.getServicesManager().getRegistration(LuckPerms.class);
-        if (provider == null) {
+        if (luckPerms == null) {
             throw new ModuleLoadException(this, "Could not load " + this.getName() + " as LuckPerms was not loaded!");
-        } else {
-            luckPerms = provider.getProvider();
         }
+        manager = plugin.getModule(PlayerManager.class);
+        queue = plugin.getModule(QueueManager.class);
     }
 
     public void savePlayer(final Trackable player) {
-        if (!(player instanceof Hunter hunter)) {
+        final User user = luckPerms.getUserManager().getUser(player.player().getUniqueId());
+        if (user == null) {
+            I.log(Level.WARNING, "Could not save player before they were unloaded by LuckPerms!");
             return;
         }
-        final User user = luckPerms.getUserManager().getUser(hunter.player().getUniqueId());
-        final MetaNode node = MetaNode.builder(META_KEY, String.valueOf(hunter.lastAttempt())).build();
-        user.data().clear(NodeType.META.predicate(m -> m.getMetaKey().equals(META_KEY)));
-        user.data().add(node);
+        if (player instanceof Hunter hunter) {
+            final MetaNode node = MetaNode.builder(ATTEMPT_META, String.valueOf(hunter.lastAttempt())).build();
+            user.data().clear(NodeType.META.predicate(m -> m.getMetaKey().equals(ATTEMPT_META)));
+            user.data().add(node);
+
+            user.data().clear(NodeType.META.predicate(m -> m.getMetaKey().equals(NO_PRIORITY_META)));
+            if (!hunter.hasPriority()) {
+                final MetaNode priorityNode = MetaNode.builder(NO_PRIORITY_META, "true").build();
+                user.data().add(priorityNode);
+            }
+        } else if (player instanceof Prey prey) {
+            final MetaNode node = MetaNode.builder(LIVES_META, String.valueOf(prey.getLives())).build();
+            user.data().clear(NodeType.META.predicate(m -> m.getMetaKey().equals(LIVES_META)));
+            user.data().add(node);
+        }
         luckPerms.getUserManager().saveUser(user);
     }
 
-    public Trackable loadPlayer(final Player player) {
-        final CachedMetaData metaData = luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
-        Long lastAttempt = metaData.getMetaValue(META_KEY, Long::parseLong).orElse(null);
-        if (lastAttempt == null) {
-            lastAttempt = 0L;
+
+    /**
+     * Loads a player's metadata from LuckPerms. Will return an empty optional if an error occurred or if the player is offline.
+     */
+    public Optional<Trackable> loadPlayer(final Player player) {
+        if (!player.isOnline()) {
+            return Optional.empty();
         }
+        final User user = luckPerms.getUserManager().getUser(player.getUniqueId());
+        if (user == null) {
+            I.log(Level.WARNING, "LuckPerms could not load user " + player.getName() + " due to an unknown reason! Using default hunter role...");
+            return Optional.of(new Hunter(player, false, 0));
+        }
+
         final Trackable trackable;
-        final String role = queryRole(player);
-        if (role == null || !priorityRoles.contains(role)) {
-            if (preyRole.equalsIgnoreCase(role)) {
-                I.log(Level.WARNING, "Debug -> Loading player as prey!");
-                trackable = new Prey(player, maxLives);
-            } else {
-                I.log(Level.WARNING, "Debug -> Loading player as hunter without priority!");
-                trackable = new Hunter(player, false, lastAttempt);
-            }
+        final CachedMetaData metaData = user.getCachedData().getMetaData();
+
+        if (isPreyUser(user)) {
+            I.log(Level.WARNING, "Debug -> Loading player as prey!");
+            trackable = new Prey(player, metaData.getMetaValue(LIVES_META, Integer::parseInt).orElse(-1));
         } else {
-            // priority
-            I.log(Level.WARNING, "Debug -> Loading player as hunter with priority!");
-            trackable = new Hunter(player, true, lastAttempt);
-        }
-        return trackable;
-    }
-
-    @Nullable
-    public String queryRole(final Player player) {
-        final ImmutableContextSet contextSet = luckPerms.getContextManager().getContext(player);
-
-        for (final String value : contextSet.getValues("discordsrv")) {
-            if (value.startsWith("role=")) {
-                final String format = value.substring(5);
-                I.log(Level.WARNING, "Found role called " + format);
-                return format;
+            long lastAttempt = metaData.getMetaValue(ATTEMPT_META, Long::parseLong).orElse(0L);
+            final boolean isPriorityNow = isPriorityUser(user);
+            if (metaData.getMetaValue(NO_PRIORITY_META, Boolean::parseBoolean).orElse(false) && isPriorityNow) {
+                // if user previously had no priority, but is priority now -> give them a second chance by setting their last attempt to 0
+                lastAttempt = 0L;
             }
+
+            trackable = new Hunter(player, isPriorityNow, lastAttempt);
+            I.log(Level.WARNING, "Debug -> Loaded hunter. Does hunter have priorty? " + ((Hunter) trackable).hasPriority());
         }
-        return null;
+        return Optional.of(trackable);
     }
 
+    public boolean isPreyUser(final User user) {
+        return user.getInheritedGroups(user.getQueryOptions()).stream().anyMatch(g -> preyRole.equals(g.getName()));
+    }
+
+    public boolean isPriorityUser(final User user) {
+        return user.getInheritedGroups(user.getQueryOptions()).stream().anyMatch(g -> priorityRoles.contains(g.getName()));
+    }
 
     @Override
     public void cancel() {
