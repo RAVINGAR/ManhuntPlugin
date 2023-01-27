@@ -96,10 +96,12 @@ public class LuckPermsHandler extends Module {
                     manager.getPlayer(player).ifPresent(trackable -> {
                         if (trackable instanceof Hunter hunter) {
                             if (!hunter.hasPriority()) {
-                                queue.remove(hunter);
                                 hunter.setPriority(true);
+                                if (!queue.isHunterAhead(hunter)) {
+                                    queue.remove(hunter);
+                                    queue.enqueue(hunter);
+                                }
                                 hunter.player().sendMessage(ChatColor.GREEN + "You now have priority as a hunter!");
-                                queue.enqueue(hunter);
                             }
                         }
                     });

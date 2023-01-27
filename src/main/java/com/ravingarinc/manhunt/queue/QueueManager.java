@@ -3,6 +3,7 @@ package com.ravingarinc.manhunt.queue;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
+import com.ravingarinc.manhunt.api.async.AsyncHandler;
 import com.ravingarinc.manhunt.api.util.I;
 import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
@@ -134,9 +135,24 @@ public class QueueManager extends Module {
         } else {
             queue.addLast(trackable);
         }
-        for (int i = 0; i < queue.size(); i++) {
-            queue.get(i).player().sendMessage(ChatColor.GRAY + "You are now position " + (i + 1) + " out of " + queue.size());
+        AsyncHandler.runSyncTaskLater(() -> {
+            for (int i = 0; i < queue.size(); i++) {
+                queue.get(i).player().sendMessage(ChatColor.GRAY + "You are now position " + (i + 1) + " out of " + queue.size());
+            }
+        }, 5L);
+    }
+
+    public boolean isHunterAhead(final Hunter hunter) {
+        for (int i = queue.size() - 1; i >= 0; i--) {
+            final Hunter trackable = queue.get(i);
+            if (trackable.player().getUniqueId().equals(hunter.player().getUniqueId())) {
+                return false;
+            } else if (trackable.hasPriority()) {
+                // if has priority and hunter has NOT been found, then we assume they are ahead
+                return true;
+            }
         }
+        return false;
     }
 
     @Nullable
