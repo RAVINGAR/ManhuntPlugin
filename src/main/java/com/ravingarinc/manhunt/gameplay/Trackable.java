@@ -1,5 +1,6 @@
 package com.ravingarinc.manhunt.gameplay;
 
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event;
 
@@ -67,7 +68,11 @@ public abstract class Trackable {
      */
     public boolean handleEvent(final Event event) {
         final Boolean result = eventHandlers.get(event.getClass());
-        return result != null && result;
+        final boolean handle = result != null && result;
+        if (handle) {
+            player.sendMessage(ChatColor.RED + "You cannot perform that action!");
+        }
+        return handle;
     }
 
     @Override

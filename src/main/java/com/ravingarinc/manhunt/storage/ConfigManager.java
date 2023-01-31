@@ -46,6 +46,14 @@ public class ConfigManager extends Module {
                 }
                 gameplayManager.setWorld(world);
             });
+            wrap("prey-spawn-world", child::getString).ifPresent(w -> {
+                World world = plugin.getServer().getWorld(w);
+                if (world == null) {
+                    I.log(Level.WARNING, "Could not find a world named '" + w + "'! Using default instead...");
+                    world = plugin.getServer().getWorlds().get(0);
+                }
+                queueManager.setGameWorld(world);
+            });
             wrap("max-hunters", child::getInt).ifPresent(gameplayManager::setMaxHunters);
             wrap("prey-lives", child::getInt).ifPresent(gameplayManager::setMaxLives);
             wrap("hunter-min-spawn-range", child::getInt).ifPresent(queueManager::setMinSpawnRange);
@@ -85,6 +93,10 @@ public class ConfigManager extends Module {
         consumeSection(config, "queue", (child) -> {
             final LuckPermsHandler manager = plugin.getModule(LuckPermsHandler.class);
             manager.clearPriorityRoles();
+
+            wrap("twitch-quick-link", child::getString).ifPresent(gameplayManager::setTwitchLink);
+            wrap("youtube-quick-link", child::getString).ifPresent(gameplayManager::setYoutubeLink);
+
             wrap("prey-role", child::getString).ifPresent(manager::setPreyRole);
             wrap("confirm-timeout", child::getInt).ifPresent(queueManager::setConfirmTimeout);
             wrap("priority-roles", child::getStringList).ifPresent(v -> v.forEach(manager::addPriorityRole));

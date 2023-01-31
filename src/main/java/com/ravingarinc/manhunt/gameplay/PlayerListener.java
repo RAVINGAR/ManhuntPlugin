@@ -57,7 +57,11 @@ public class PlayerListener extends ModuleListener {
 
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
-        AsyncHandler.runSyncTaskLater(() -> manager.loadPlayer(event.getPlayer()), 5L);
+        AsyncHandler.runSyncTaskLater(() -> {
+            if (manager.loadPlayer(event.getPlayer()) instanceof Hunter hunter) {
+                gameplayManager.resetLocation(hunter);
+            }
+        }, 5L);
     }
 
     @EventHandler
@@ -103,7 +107,10 @@ public class PlayerListener extends ModuleListener {
 
     @EventHandler
     public void onDeath(final PlayerDeathEvent event) {
-        manager.getPlayer(event.getEntity()).ifPresent(player -> gameplayManager.onDeath(player));
+        manager.getPlayer(event.getEntity()).ifPresent(player -> {
+            gameplayManager.onDeath(player);
+
+        });
     }
 
     @EventHandler

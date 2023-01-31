@@ -9,6 +9,7 @@ import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
 import com.ravingarinc.manhunt.gameplay.Prey;
 import com.ravingarinc.manhunt.gameplay.Trackable;
+import com.ravingarinc.manhunt.queue.GameplayManager;
 import com.ravingarinc.manhunt.queue.QueueManager;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.cacheddata.CachedMetaData;
@@ -39,6 +40,8 @@ public class LuckPermsHandler extends Module {
 
     private QueueManager queue = null;
 
+    private GameplayManager gameplayManager = null;
+
     public LuckPermsHandler(final RavinPlugin plugin) {
         super(LuckPermsHandler.class, plugin);
         priorityRoles = new ArrayList<>();
@@ -64,6 +67,13 @@ public class LuckPermsHandler extends Module {
         }
         final Player player = Bukkit.getPlayer(event.getUser().getUniqueId());
         if (player == null) {
+            return;
+        }
+        final Optional<Trackable> opt = manager.getPlayer(player);
+        if (opt.isEmpty()) {
+            return;
+        }
+        if (gameplayManager.isInGame(opt.get())) {
             return;
         }
 
@@ -130,6 +140,7 @@ public class LuckPermsHandler extends Module {
         }
         manager = plugin.getModule(PlayerManager.class);
         queue = plugin.getModule(QueueManager.class);
+        gameplayManager = plugin.getModule(GameplayManager.class);
     }
 
     public void savePlayer(final Trackable player) {
@@ -174,7 +185,6 @@ public class LuckPermsHandler extends Module {
         final CachedMetaData metaData = user.getCachedData().getMetaData();
 
         if (isPreyUser(user)) {
-            I.log(Level.WARNING, "Debug -> Loading player as prey!");
             trackable = new Prey(player, metaData.getMetaValue(LIVES_META, Integer::parseInt).orElse(-1));
         } else {
             long lastAttempt = metaData.getMetaValue(ATTEMPT_META, Long::parseLong).orElse(0L);
@@ -183,9 +193,7 @@ public class LuckPermsHandler extends Module {
                 // if user previously had no priority, but is priority now -> give them a second chance by setting their last attempt to 0
                 lastAttempt = 0L;
             }
-
             trackable = new Hunter(player, isPriorityNow, lastAttempt);
-            I.log(Level.WARNING, "Debug -> Loaded hunter. Does hunter have priorty? " + ((Hunter) trackable).hasPriority());
         }
         return Optional.of(trackable);
     }

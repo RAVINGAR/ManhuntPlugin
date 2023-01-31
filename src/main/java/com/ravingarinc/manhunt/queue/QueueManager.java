@@ -3,7 +3,6 @@ package com.ravingarinc.manhunt.queue;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
-import com.ravingarinc.manhunt.api.async.AsyncHandler;
 import com.ravingarinc.manhunt.api.util.I;
 import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
@@ -47,6 +46,8 @@ public class QueueManager extends Module {
     private int spawnX = 0;
     private int spawnZ = 0;
 
+    private World gameplayWorld;
+
     public QueueManager(final RavinPlugin plugin) {
         super(QueueManager.class, plugin, PlayerManager.class);
         callbacks = new ConcurrentHashMap<>();
@@ -54,6 +55,10 @@ public class QueueManager extends Module {
         random = new Random(System.currentTimeMillis());
         futureTasks = new ConcurrentHashMap<>();
         scheduler = plugin.getServer().getScheduler();
+    }
+
+    public void setGameWorld(final World world) {
+        this.gameplayWorld = world;
     }
 
     public void setMinSpawnRange(final int range) {
@@ -111,6 +116,7 @@ public class QueueManager extends Module {
 
     public void remove(final Hunter hunter) {
         queue.remove(hunter);
+        notifyPosition();
     }
 
     public void removeIgnore(final Hunter hunter) {
@@ -125,17 +131,32 @@ public class QueueManager extends Module {
         if (ignoringHunters.contains(trackable)) {
             return;
         }
+        if (queue.size() == 0) {
+            queue.add(trackable);
+            notifyPosition();
+            return;
+        }
         if (trackable.hasPriority()) {
-            for (int i = queue.size() - 1; i >= 0; i--) {
+            for (int i = queue.size() - 1; i > -1; i--) {
                 final Hunter next = queue.get(i);
+                if (i == 0) {
+                    queue.addFirst(trackable);
+                    break;
+                }
                 if (next.hasPriority()) {
-                    queue.add(i - 1, trackable);
+                    queue.add(i + 1, trackable);
+                    break;
                 }
             }
+            trackable.player().sendMessage(ChatColor.GREEN + "You have priority and have been fast tracked in the queue!");
         } else {
             queue.addLast(trackable);
         }
-        AsyncHandler.runSyncTaskLater(() -> {
+        notifyPosition();
+    }
+
+    public void notifyPosition() {
+        scheduler.runTaskLater(plugin, () -> {
             for (int i = 0; i < queue.size(); i++) {
                 queue.get(i).player().sendMessage(ChatColor.GRAY + "You are now position " + (i + 1) + " out of " + queue.size());
             }
@@ -157,13 +178,15 @@ public class QueueManager extends Module {
 
     @Nullable
     public Hunter poll() {
-        return queue.poll();
+        final Hunter hunter = queue.poll();
+        notifyPosition();
+        return hunter;
     }
 
     public void addCallback(final Hunter hunter, final Location origin) {
-        final FutureTask<Location> future = new FutureTask<>(() -> findSuitableLocation(origin.getWorld(), origin.getBlockX(), origin.getBlockZ(), minSpawnRange, maxSpawnRange));
+        final FutureTask<Location> future = new FutureTask<>(() -> findSuitableLocation(gameplayWorld, origin.getBlockX(), origin.getBlockZ(), minSpawnRange, maxSpawnRange));
         scheduler.runTask(plugin, future);
-        this.addCallback(hunter, origin, future);
+        this.addCallback(hunter, future);
     }
 
     public List<String> getNamesInQueue() {
@@ -176,25 +199,32 @@ public class QueueManager extends Module {
         return callbacks.size();
     }
 
-    public void acceptCallback(final Hunter hunter) {
+    public boolean tryAcceptCallback(final Hunter hunter) {
         final QueueCallback callback = callbacks.get(hunter.player().getUniqueId());
         if (callback != null) {
-            callback.accept();
+            removeCallback(hunter);
+            return callback.accept();
         }
+        return false;
     }
 
-    public void declineCallback(final Hunter hunter) {
+    public boolean tryDeclineCallback(final Hunter hunter) {
         final QueueCallback callback = callbacks.get(hunter.player().getUniqueId());
         if (callback != null) {
-            callback.decline();
+            removeCallback(hunter);
+            return callback.decline();
         }
+        return false;
     }
 
-    public void addCallback(final Hunter hunter, final Location origin, final FutureTask<Location> future) {
+    public void addCallback(final Hunter hunter, final FutureTask<Location> future) {
         final UUID uuid = hunter.player().getUniqueId();
         futureTasks.put(uuid, future);
 
-        final QueueCallback task = new QueueCallback(this, hunter, confirmTimeout, origin, future);
+        final QueueCallback task = new QueueCallback(hunter, confirmTimeout, future, () -> {
+            removeCallback(hunter);
+            hunter.player().kickPlayer("You were kicked as a queue position became available but you did not respond!");
+        });
         callbacks.put(uuid, task);
         task.ask();
         task.runTaskLater(plugin, confirmTimeout * 20L);
@@ -213,8 +243,7 @@ public class QueueManager extends Module {
 
     public void addPreySpawn(final Prey prey) {
         final Player player = prey.player();
-        final World world = player.getWorld();
-        final FutureTask<Location> future = new FutureTask<>(() -> findSuitableLocation(world, spawnX, spawnZ, 0, 20));
+        final FutureTask<Location> future = new FutureTask<>(() -> findSuitableLocation(gameplayWorld, spawnX, spawnZ, 0, 20));
         futureTasks.put(player.getUniqueId(), future);
         scheduler.runTask(plugin, future);
         scheduler.runTaskLater(plugin, () -> {

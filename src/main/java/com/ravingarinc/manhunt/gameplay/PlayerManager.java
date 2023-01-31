@@ -4,9 +4,9 @@ import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
 import com.ravingarinc.manhunt.queue.GameplayManager;
-import com.ravingarinc.manhunt.queue.QueueManager;
 import com.ravingarinc.manhunt.role.LuckPermsHandler;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -22,8 +22,6 @@ public class PlayerManager extends Module {
 
     private GameplayManager gameplayManager;
 
-    private QueueManager queue;
-
     public PlayerManager(final RavinPlugin plugin) {
         super(PlayerManager.class, plugin, LuckPermsHandler.class);
         this.trackables = new ConcurrentHashMap<>();
@@ -33,17 +31,21 @@ public class PlayerManager extends Module {
     protected void load() throws ModuleLoadException {
         handler = plugin.getModule(LuckPermsHandler.class);
         gameplayManager = plugin.getModule(GameplayManager.class);
-        queue = plugin.getModule(QueueManager.class);
         for (final Player player : plugin.getServer().getOnlinePlayers()) {
-            loadPlayer(player);
+            this.handler.loadPlayer(player).ifPresent(trackable -> trackables.put(player.getUniqueId(), trackable));
         }
     }
 
-    public void loadPlayer(final Player player) {
-        this.handler.loadPlayer(player).ifPresent(trackable -> {
+    @Nullable
+    public Trackable loadPlayer(final Player player) {
+        final Optional<Trackable> opt = this.handler.loadPlayer(player);
+        if (opt.isPresent()) {
+            final Trackable trackable = opt.get();
             trackables.put(player.getUniqueId(), trackable);
             gameplayManager.tryJoin(trackable);
-        });
+            return trackable;
+        }
+        return null;
     }
 
     public Optional<Trackable> getPlayer(final Player player) {
@@ -52,7 +54,7 @@ public class PlayerManager extends Module {
 
     @Override
     public void cancel() {
-        trackables.values().forEach(trackable -> handler.savePlayer(trackable));
+        trackables.values().forEach(trackable -> this.handler.savePlayer(trackable));
         trackables.clear();
     }
 
@@ -60,10 +62,15 @@ public class PlayerManager extends Module {
         return Collections.unmodifiableCollection(trackables.values());
     }
 
+    public void savePlayer(final Player player) {
+        getPlayer(player).ifPresent(trackable -> this.handler.savePlayer(trackable));
+    }
+
     public void unloadPlayer(final Player player) {
-        final Trackable trackable = trackables.get(player.getUniqueId());
-        this.gameplayManager.remove(trackable);
-        this.handler.savePlayer(trackable);
-        this.trackables.remove(player.getUniqueId());
+        getPlayer(player).ifPresent(trackable -> {
+            this.gameplayManager.remove(trackable);
+            this.handler.savePlayer(trackable);
+            this.trackables.remove(trackable.player().getUniqueId());
+        });
     }
 }

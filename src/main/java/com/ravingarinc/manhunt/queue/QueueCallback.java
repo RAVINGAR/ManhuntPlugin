@@ -21,24 +21,22 @@ public class QueueCallback extends BukkitRunnable {
     private final Hunter hunter;
     private final long timeout;
     private final FutureTask<Location> spawnLocation;
-    private final QueueManager manager;
-    private final Location origin;
+    private final Runnable runnable;
     private boolean accepted;
     private boolean declined;
 
-    public QueueCallback(final QueueManager manager, final Hunter hunter, final long timeout, final Location origin, final FutureTask<Location> spawnLocation) {
+    public QueueCallback(final Hunter hunter, final long timeout, final FutureTask<Location> spawnLocation, final Runnable runnable) {
         this.hunter = hunter;
-        this.manager = manager;
+        this.runnable = runnable;
         this.timeout = timeout;
         this.spawnLocation = spawnLocation;
         this.accepted = false;
         this.declined = false;
-        this.origin = origin;
     }
 
     public void ask() {
         final Player player = hunter.player();
-        player.sendTitle(ChatColor.DARK_GREEN + "A new hunter position is available!", "", 10, 60, 20);
+        player.sendTitle(ChatColor.DARK_GREEN + "Position available!", "A new hunter position is available", 10, 60, 20);
         final ComponentBuilder builder = new ComponentBuilder(ChatColor.GRAY + "A new hunter position is available! Click ");
         builder.append(ChatColor.GREEN + "[Accept]")
                 .event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/mh accept"))
@@ -49,15 +47,15 @@ public class QueueCallback extends BukkitRunnable {
                 .append(ChatColor.RED + "[Decline]")
                 .event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/mh decline"))
                 .event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Decline the position and give the chance to the next player in queue!")))
-                .append(ChatColor.GRAY + " within " + timeout + "seconds to make your choice!")
+                .append(ChatColor.GRAY + " within " + timeout + " seconds to make your choice!")
                 .event((ClickEvent) null)
                 .event((HoverEvent) null);
         player.spigot().sendMessage(builder.create());
     }
 
-    public synchronized void accept() {
+    public synchronized boolean accept() {
         if (declined) {
-            return;
+            return false;
         }
         accepted = true;
         final Player player = hunter.player();
@@ -71,43 +69,29 @@ public class QueueCallback extends BukkitRunnable {
             I.log(Level.SEVERE, "Encountered issue finding a suitable spawn location!", e);
         }
         if (location == null) {
-            return;
+            return false;
         }
         player.teleport(location);
-        player.sendTitle("", ChatColor.DARK_GREEN + "Good luck out there!", 20, 60, 20);
-
-        hunter.start();
-        manager.removeCallback(hunter);
+        player.sendTitle("", ChatColor.DARK_GREEN + "Good luck out there!", 20, 100, 20);
         cancel();
+        return true;
     }
 
-    public synchronized void decline() {
+    public synchronized boolean decline() {
         if (accepted) {
-            return;
-        }
-        declined = true;
-        hunter.player().sendMessage(ChatColor.GRAY + "You have declined the position and have been placed at the back of the queue!");
-        manager.removeCallback(hunter);
-        manager.enqueue(hunter);
-        cancel();
-    }
-
-    public synchronized void forceDecline() {
-        if (accepted) {
-            return;
+            return false;
         }
         declined = true;
         cancel();
+        return true;
     }
 
     @Override
     public void run() {
         if (!accepted && !declined) {
-            manager.removeCallback(hunter);
-            final Hunter newPoll = manager.poll();
-            if (newPoll != null) {
-                manager.addCallback(newPoll, origin, spawnLocation);
-            }
+            accepted = true;
+            declined = true;
+            runnable.run();
         }
     }
 }

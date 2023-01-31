@@ -45,7 +45,7 @@ public class CommandOption {
         this.options = new LinkedHashMap<>();
         this.tabCompletions = null;
         this.requiredArgs = requiredArgs;
-        this.permission = permission;
+        this.permission = permission == null ? parent == null ? null : parent.permission : permission;
         this.description = description;
     }
 
@@ -76,7 +76,7 @@ public class CommandOption {
         return option;
     }
 
-    public void addHelpOption(final ChatColor primary, final ChatColor secondary) {
+    public CommandOption addHelpOption(final ChatColor primary, final ChatColor secondary) {
         final CommandOption option = new CommandOption("?", this, null,
                 "Shows a list of sub-commands for this command.", requiredArgs,
                 (sender, args) -> {
@@ -84,14 +84,37 @@ public class CommandOption {
                     return true;
                 });
         this.options.put("?", option);
+        return option;
     }
 
     public CommandOption getParent() {
         return parent;
     }
 
-    public String getHelp(final ChatColor prefix) {
-        return prefix + "/" + getIdentifiers() + ChatColor.GRAY + " " + description;
+    public String getHelp(final ChatColor prefix, final CommandSender sender) {
+        final StringBuilder command = new StringBuilder();
+        command.append(prefix);
+        command.append("/");
+        command.append(getIdentifiers());
+        if (!options.isEmpty()) {
+            command.append("<");
+            final Iterator<String> iterator = options.keySet().iterator();
+            while (iterator.hasNext()) {
+                final String key = iterator.next();
+                if (!key.equals("?") && options.get(key).hasPermission(sender)) {
+                    command.append(key);
+                    command.append(iterator.hasNext() ? "|" : ">");
+                }
+
+            }
+        }
+        if (!description.isEmpty()) {
+            command.append(ChatColor.GRAY);
+            command.append(" ");
+            command.append(description);
+        }
+
+        return command.toString();
     }
 
     /**
@@ -113,29 +136,16 @@ public class CommandOption {
         return builder.toString();
     }
 
-    public String getUsage() {
-        final StringBuilder command = new StringBuilder(getIdentifiers());
-        if (!options.isEmpty()) {
-            command.append("<");
-            final Iterator<String> iterator = options.keySet().iterator();
-            while (iterator.hasNext()) {
-                command.append(iterator.next());
-                command.append(iterator.hasNext() ? "|" : ">");
-            }
-        }
-        return command.toString();
-    }
-
     public List<String> getSubOptionHelp(final CommandSender sender, final ChatColor primary, final ChatColor secondary) {
         final List<String> list = new LinkedList<>();
         options.values().forEach(option -> {
             if (!option.identifier.equals("?") && option.hasPermission(sender)) {
-                list.add(option.getHelp(secondary));
+                list.add(option.getHelp(secondary, sender));
             }
         });
         if (!options.isEmpty()) {
             final String formatted = Character.toUpperCase(identifier.charAt(0)) + identifier.substring(1);
-            list.add(0, ChatColor.GRAY + "------- " + primary + formatted + ChatColor.GRAY + "-------");
+            list.add(0, ChatColor.GRAY + "------- " + primary + formatted + ChatColor.GRAY + " -------");
         }
         return list;
     }
@@ -182,7 +192,7 @@ public class CommandOption {
                 return true;
             }
         }
-        sender.sendMessage(ChatColor.GRAY + "Invalid arguments! Usage | /" + getUsage());
+        sender.sendMessage(ChatColor.GRAY + "Invalid arguments! Usage | " + getHelp(ChatColor.GRAY, sender));
         return true;
     }
 

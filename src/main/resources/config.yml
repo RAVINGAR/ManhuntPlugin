@@ -18,6 +18,7 @@ gameplay:
   hunter-max-spawn-range: 2500
   # Where are prey spawned after a game is started, format is x, z.
   prey-spawn-location: 0,0
+  prey-spawn-world: 'World'
   # The world where all the lobby is present.
   spawn-world-name: 'World'
 queue:
@@ -26,13 +27,16 @@ queue:
   # will have not played the server before and therefore will teleport them to the spawn.
   auto-teleport-new-prey: true
   # The LuckPerm role which says a player is a 'prey'
-  prey-role: 'owner'
+  prey-role: 'prey'
   # The LuckPerms roles which gives priority status to Hunters
   priority-roles:
     - supporter
     - friend
   # When a position becomes available, how much time before the confirmation is timed out. This setting is in seconds
-  confirm-timeout: 15
+  confirm-timeout: 30
   # How much time must past for premium members until they can play as a hunter again. This will read hours as h, or minutes as m
   cooldown: 12h
+  # Links used when a player is not a paid subscriber.
+  twitch-quick-link: 'https://www.twitch.tv/uriahshorts'
+  youtube-quick-link: 'https://www.youtube.com/@uriahshorts'
   

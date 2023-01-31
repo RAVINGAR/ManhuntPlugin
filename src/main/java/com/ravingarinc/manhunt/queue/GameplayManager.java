@@ -7,6 +7,10 @@ import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
 import com.ravingarinc.manhunt.gameplay.Prey;
 import com.ravingarinc.manhunt.gameplay.Trackable;
+import net.md_5.bungee.api.chat.ClickEvent;
+import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.HoverEvent;
+import net.md_5.bungee.api.chat.hover.content.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Color;
@@ -17,18 +21,19 @@ import org.bukkit.World;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.scheduler.BukkitRunnable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GameplayManager extends Module {
     private final Set<UUID> respawningPlayers;
     private final Random random;
-    private final AtomicBoolean isQueueStopped;
     private Set<Hunter> currentHunters;
     private Set<Prey> currentPrey;
     private PlayerManager manager;
@@ -43,13 +48,25 @@ public class GameplayManager extends Module {
 
     private World world = null;
 
+    private QueueRunner queueChecker;
+
+    private String youtubeLink = "";
+    private String twitchLink = "";
+
     public GameplayManager(final RavinPlugin plugin) {
         super(GameplayManager.class, plugin, PlayerManager.class, QueueManager.class);
         maxHunters = 5;
         respawningPlayers = new HashSet<>();
         currentHunters = new HashSet<>();
         random = new Random(System.currentTimeMillis());
-        isQueueStopped = new AtomicBoolean(true);
+    }
+
+    public void setYoutubeLink(final String youtube) {
+        this.youtubeLink = youtube;
+    }
+
+    public void setTwitchLink(final String twitch) {
+        this.twitchLink = twitch;
     }
 
     public void setTeleportNewPrey(final boolean newPrey) {
@@ -100,47 +117,80 @@ public class GameplayManager extends Module {
         currentHunters = newSet;
     }
 
+    public void sendSupportMessage(final Player player) {
+        final ComponentBuilder builder = new ComponentBuilder();
+        builder.append(ChatColor.GRAY + "You did not join the queue as you have already played as a hunter! If you wish to try your luck again, become a paid subscriber for UriahShorts on ")
+                .append(ChatColor.LIGHT_PURPLE + "[Twitch]")
+                .event(new ClickEvent(ClickEvent.Action.OPEN_URL, twitchLink))
+                .event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.DARK_GRAY + "Click here to open the URL")))
+                .append(ChatColor.GRAY + " or ")
+                .event((ClickEvent) null)
+                .event((HoverEvent) null)
+                .append(ChatColor.RED + "[YouTube]")
+                .event(new ClickEvent(ClickEvent.Action.OPEN_URL, youtubeLink))
+                .event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.DARK_GRAY + "Click here to open the URL")))
+                .append(ChatColor.GRAY + "!")
+                .event((ClickEvent) null)
+                .event((HoverEvent) null);
+        player.spigot().sendMessage(builder.create());
+    }
+
+    public void resetLocation(final Hunter hunter) {
+        hunter.player().teleport(world.getSpawnLocation());
+    }
+
     public void tryJoin(final Trackable trackable) {
         if (trackable instanceof Hunter hunter) {
             final long attempt = hunter.lastAttempt();
             if (attempt != 0) {
                 if (!hunter.hasPriority()) {
-                    hunter.player().sendMessage(ChatColor.RED + "You did not join the queue as you have already played as a hunter! If you wish to try your luck again, support Uriah at {URL}!");
+                    sendSupportMessage(hunter.player());
                     return;
                 }
-                final long difference = TimeUnit.SECONDS.convert(System.currentTimeMillis() - attempt, TimeUnit.MILLISECONDS);
-                // Lets say the time that has passed since the last attempt is 50 seconds.
-                // Lets say the cooldown is 60 seconds.
-                // If diff is LESS than cooldown. Then invlaid
-                //
-                if (difference < attemptCooldown) {
-                    String message = "";
-                    final long seconds = attemptCooldown - difference;
-                    if (seconds >= 60) {
-                        final long minutes = TimeUnit.MINUTES.convert(seconds, TimeUnit.SECONDS);
-                        if (minutes >= 60) {
-                            final long hours = TimeUnit.HOURS.convert(minutes, TimeUnit.MINUTES);
-                            message = hours + (hours == 1 ? "hour" : "hours");
-                        } else {
-                            message = minutes + (minutes == 1 ? "minute" : "minutes");
-                        }
-                    } else {
-                        message = seconds + (seconds == 1 ? "second" : "seconds");
-                    }
-                    hunter.player().sendMessage(ChatColor.RED + "You did not join the queue as you have played as a hunter too recently! You must wait an additional " + message);
+                if (checkCooldown(hunter)) {
                     return;
                 }
             }
+            hunter.player().sendMessage(ChatColor.GRAY + "You have joined the queue!");
             queue.enqueue(hunter);
-            hunter.player().teleport(world.getSpawnLocation());
         } else if (trackable instanceof Prey prey) {
             if (prey.getLives() == -1) {
                 prey.setLives(maxLives);
                 if (teleportNewPrey) {
-                    teleportPrey(prey);
+                    spawnNewPrey(prey);
                 }
+            } else {
+                currentPrey.add(prey);
             }
         }
+    }
+
+    public boolean checkCooldown(final Hunter hunter) {
+        final long difference = TimeUnit.SECONDS.convert(System.currentTimeMillis() - hunter.lastAttempt(), TimeUnit.MILLISECONDS);
+        if (difference < attemptCooldown) {
+            final String message;
+            final long seconds = attemptCooldown - difference;
+            if (seconds >= 60) {
+                final long minutes = TimeUnit.MINUTES.convert(seconds, TimeUnit.SECONDS);
+                if (minutes >= 60) {
+                    final long hours = TimeUnit.HOURS.convert(minutes, TimeUnit.MINUTES);
+                    message = hours + (hours == 1 ? "hour" : "hours");
+                } else {
+                    message = minutes + (minutes == 1 ? "minute" : "minutes");
+                }
+            } else {
+                message = seconds + (seconds == 1 ? "second" : "seconds");
+            }
+            hunter.player().sendMessage(ChatColor.RED + "You did not join the queue as you have played as a hunter too recently! You must wait an additional " + message);
+            return true;
+        }
+        return false;
+    }
+
+    public List<String> getCurrentHunters() {
+        final List<String> list = new ArrayList<>();
+        currentHunters.forEach(hunter -> list.add(hunter.player().getName()));
+        return list;
     }
 
     public void onSpawn(final Trackable trackable) {
@@ -155,11 +205,11 @@ public class GameplayManager extends Module {
                     if (currentPrey.isEmpty()) {
                         finishGame();
                     } else {
-                        player.sendTitle(ChatColor.RED + "You have run out of lives!", ChatColor.RED + "You have been alive for" + prey.getTimeAlive() + "!", 10, 70, 20);
+                        player.sendTitle(ChatColor.RED + "You have run out of lives!", ChatColor.RED + "You have been alive for" + prey.getTimeAlive() + "!", 10, 100, 20);
                     }
                 } else {
                     prey.removeLife();
-                    player.sendTitle(ChatColor.RED + "You have lost a life!", ChatColor.RED + "You have " + prey.getLives() + " lives left..", 10, 70, 20);
+                    player.sendTitle(ChatColor.RED + "You have lost a life!", ChatColor.RED + "You have " + prey.getLives() + " lives left..", 10, 100, 20);
                     player.sendMessage();
                 }
             }
@@ -172,11 +222,18 @@ public class GameplayManager extends Module {
             if (currentHunters.remove(hunter)) {
                 Bukkit.broadcastMessage(ChatColor.DARK_RED + "The hunter '" + hunter.player().getName() + "' has been defeated! They were alive for " + hunter.getTimeAlive());
                 hunter.end();
-                if (!isQueueStopped.getAcquire() && currentHunters.size() + queue.callbackSize() < maxHunters) {
-                    spawnNewHunter();
-                }
+                manager.savePlayer(hunter.player());
             }
         }
+    }
+
+    public boolean isInGame(final Trackable trackable) {
+        if (trackable instanceof Hunter hunter) {
+            return currentHunters.contains(hunter);
+        } else if (trackable instanceof Prey prey) {
+            return currentPrey.contains(prey);
+        }
+        return false;
     }
 
     public void remove(final Trackable trackable) {
@@ -184,9 +241,7 @@ public class GameplayManager extends Module {
             if (currentHunters.remove(hunter)) {
                 Bukkit.broadcastMessage(ChatColor.DARK_RED + "The hunter '" + hunter.player().getName() + "' has disconnected! They were alive for " + hunter.getTimeAlive());
                 hunter.end();
-                if (!isQueueStopped.getAcquire() && currentHunters.size() + queue.callbackSize() < maxHunters) {
-                    spawnNewHunter();
-                }
+                manager.savePlayer(hunter.player());
             }
             queue.remove(hunter);
             queue.removeIgnore(hunter);
@@ -197,20 +252,32 @@ public class GameplayManager extends Module {
         }
     }
 
-    public void spawnNewHunter() {
-        final Hunter hunter = queue.poll();
-        if (hunter == null) {
-            throw new IllegalStateException("There are no hunters!");
-        }
-        currentPrey.stream().findAny().ifPresent(prey -> queue.addCallback(hunter, prey.player().getLocation()));
+    public List<String> getCurrentPrey() {
+        final List<String> list = new ArrayList<>();
+        currentPrey.forEach(prey -> list.add(prey.player().getName()));
+        return list;
     }
 
-    public void teleportPrey(final Prey prey) {
+    public void acceptCallback(final Hunter hunter) {
+        if (queue.tryAcceptCallback(hunter)) {
+            hunter.start();
+            currentHunters.add(hunter);
+        }
+    }
+
+    public void declineCallback(final Hunter hunter) {
+        if (queue.tryDeclineCallback(hunter)) {
+            hunter.player().sendMessage(ChatColor.GRAY + "You have declined the position and have been placed at the back of the queue!");
+            queue.enqueue(hunter);
+        }
+    }
+
+    public void spawnNewPrey(final Prey prey) {
         currentPrey.add(prey);
         queue.addPreySpawn(prey);
     }
 
-    public void teleportAllPrey() {
+    public void spawnAllPrey() {
         currentPrey.clear();
         manager.getPlayers().forEach(trackable -> {
             if (trackable instanceof Prey prey) {
@@ -221,14 +288,17 @@ public class GameplayManager extends Module {
     }
 
     public void startQueue() {
-        isQueueStopped.setRelease(false);
-        while (currentHunters.size() + queue.callbackSize() < maxHunters) {
-            spawnNewHunter();
+        if (queueChecker == null) {
+            queueChecker = new QueueRunner();
+            queueChecker.runTaskTimer(plugin, 0L, 40L);
         }
     }
 
     public void stopQueue() {
-        isQueueStopped.setRelease(true);
+        if (queueChecker != null) {
+            queueChecker.cancel();
+            queueChecker = null;
+        }
     }
 
     public void clearHunters() {
@@ -240,15 +310,10 @@ public class GameplayManager extends Module {
             player.updateInventory();
         });
         currentHunters.clear();
-        if (!isQueueStopped.getAcquire()) {
-            while (currentHunters.size() + queue.callbackSize() < maxHunters) {
-                spawnNewHunter();
-            }
-        }
     }
 
     public void finishGame() {
-        // todo a lot of this is just kinda lazy
+        stopQueue();
         final Location spawn = world.getSpawnLocation();
         final StringBuilder subTitles = new StringBuilder();
         subTitles.append(ChatColor.DARK_GREEN);
@@ -260,12 +325,16 @@ public class GameplayManager extends Module {
 
             visualEffects(hunter.player(), random.nextLong(20));
 
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> hunter.player().teleport(spawn), 200L);
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                hunter.player().teleport(spawn);
+                hunter.player().getInventory().clear();
+                hunter.player().updateInventory();
+            }, 200L);
         });
         currentHunters.clear();
 
         Bukkit.getOnlinePlayers().forEach(player -> {
-            player.sendTitle(ChatColor.GREEN + "The Hunters have won!", subTitles.toString(), 10, 80, 20);
+            player.sendTitle(ChatColor.GREEN + "The Hunters have Won!", subTitles.toString(), 10, 200, 20);
         });
     }
 
@@ -285,20 +354,37 @@ public class GameplayManager extends Module {
             meta.addEffect(FireworkEffect.builder()
                     .with(FireworkEffect.Type.BURST).withColor(Color.BLUE).withColor(Color.ORANGE).build());
             meta.addEffect(FireworkEffect.builder()
-                    .with(FireworkEffect.Type.STAR).withColor(Color.PURPLE).withColor(Color.ORANGE).build());
+                    .with(FireworkEffect.Type.STAR).withColor(Color.BLUE).withColor(Color.ORANGE).build());
             firework.setFireworkMeta(meta);
-        }, delay + 50L);
+        }, delay + 30L);
 
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             final Firework firework = player.getLocation().getWorld().spawn(player.getLocation(), Firework.class);
             final FireworkMeta meta = firework.getFireworkMeta();
-            meta.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE).flicker(true).withColor(Color.PURPLE).withColor(Color.YELLOW).build());
+            meta.addEffect(FireworkEffect.builder().with(FireworkEffect.Type.BALL_LARGE).flicker(true).withColor(Color.GREEN).withColor(Color.YELLOW).build());
             firework.setFireworkMeta(meta);
-        }, delay + 95L);
+        }, delay + 40L);
     }
 
     @Override
     public void cancel() {
+        if (queueChecker != null) {
+            queueChecker.cancel();
+            queueChecker = null;
+        }
+    }
 
+
+    private class QueueRunner extends BukkitRunnable {
+        @Override
+        public void run() {
+            while (!isCancelled() && currentHunters.size() + queue.callbackSize() < maxHunters) {
+                final Hunter hunter = queue.poll();
+                if (hunter == null) {
+                    break;
+                }
+                currentPrey.stream().findAny().ifPresent(prey -> queue.addCallback(hunter, prey.player().getLocation()));
+            }
+        }
     }
 }

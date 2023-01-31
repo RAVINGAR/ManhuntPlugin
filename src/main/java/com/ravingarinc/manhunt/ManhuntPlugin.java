@@ -28,4 +28,10 @@ public final class ManhuntPlugin extends RavinPlugin {
     public void loadCommands() {
         new ManhuntCommand(this).register(this);
     }
+
+    @Override
+    public void onDisable() {
+        getModule(GameplayManager.class).clearHunters();
+        super.onDisable();
+    }
 }
