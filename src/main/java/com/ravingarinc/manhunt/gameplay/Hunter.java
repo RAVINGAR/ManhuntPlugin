@@ -35,7 +35,11 @@ public class Hunter extends Trackable {
     @Override
     public void end() {
         super.end();
-        this.lastAttempt = System.currentTimeMillis();
+        setLastAttempt(System.currentTimeMillis());
+    }
+
+    public synchronized void setLastAttempt(final long lastAttempt) {
+        this.lastAttempt = lastAttempt;
     }
 
     public void setPriority(final boolean priority) {

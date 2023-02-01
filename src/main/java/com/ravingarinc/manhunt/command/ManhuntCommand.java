@@ -29,6 +29,25 @@ public class ManhuntCommand extends BaseCommand {
                     player.sendMessage(ChatColor.GRAY + "Plugin has been reloaded..");
                     return true;
                 }).getParent()
+                .addOption("reset-attempt", ChatColor.RED + "<player> " + ChatColor.GRAY + "- Reset a player's last attempt so they can enjoy the queue again", 3, (sender, args) -> {
+                    final Player player = plugin.getServer().getPlayer(args[2]);
+                    if (player == null) {
+                        sender.sendMessage(ChatColor.RED + "Could not find a valid player called " + args[2]);
+                    } else {
+                        playerManager.getPlayer(player).ifPresentOrElse(trackable -> {
+                            if (trackable instanceof Hunter hunter) {
+                                hunter.setLastAttempt(0L);
+                                if (!queue.isInQueue(hunter) && !queue.hasCallback(hunter)) {
+                                    queue.removeIgnore(hunter);
+                                    manager.tryJoin(hunter);
+                                }
+                            } else {
+                                sender.sendMessage(ChatColor.RED + "That player is not a hunter!");
+                            }
+                        }, () -> sender.sendMessage(ChatColor.RED + "Could not find that player!"));
+                    }
+                    return true;
+                })
                 .addOption("spawn-all-prey",
                         "- Teleports all prey to the configured spawn location. " +
                                 "This teleports them regardless of where they are on the server.", 2, (sender, args) -> {
