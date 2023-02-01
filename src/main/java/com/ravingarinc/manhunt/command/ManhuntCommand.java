@@ -29,7 +29,7 @@ public class ManhuntCommand extends BaseCommand {
                     player.sendMessage(ChatColor.GRAY + "Plugin has been reloaded..");
                     return true;
                 }).getParent()
-                .addOption("reset-attempt", ChatColor.RED + "<player> " + ChatColor.GRAY + "- Reset a player's last attempt so they can enjoy the queue again", 3, (sender, args) -> {
+                .addOption("reset-attempt", ChatColor.RED + "<player> " + ChatColor.GRAY + "- Reset a player's last attempt so they can join the queue again", 3, (sender, args) -> {
                     final Player player = plugin.getServer().getPlayer(args[2]);
                     if (player == null) {
                         sender.sendMessage(ChatColor.RED + "Could not find a valid player called " + args[2]);
