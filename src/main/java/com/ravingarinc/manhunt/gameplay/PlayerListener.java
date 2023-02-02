@@ -6,16 +6,20 @@ import com.ravingarinc.manhunt.api.ModuleLoadException;
 import com.ravingarinc.manhunt.api.async.AsyncHandler;
 import com.ravingarinc.manhunt.queue.GameplayManager;
 import org.bukkit.Material;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -62,6 +66,29 @@ public class PlayerListener extends ModuleListener {
                 gameplayManager.resetLocation(hunter);
             }
         }, 5L);
+    }
+
+    @EventHandler
+    public void onItemPickup(final EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            final ItemStack item = event.getItem().getItemStack();
+            if (item.getType() == Material.COMPASS && item.getItemMeta() != null) {
+                manager.getPlayer(player).ifPresent(trackable -> {
+                    final PersistentDataContainer container = item.getItemMeta().getPersistentDataContainer();
+                    if (CompassUtil.HUNTER_COMPASS.equals(container.get(gameplayManager.getKey(), PersistentDataType.STRING))) {
+                        if (!(trackable instanceof Hunter)) {
+                            event.getItem().remove();
+                            event.setCancelled(true);
+                        }
+                    } else if (CompassUtil.PREY_COMPASS.equals(container.get(gameplayManager.getKey(), PersistentDataType.STRING))) {
+                        if (!(trackable instanceof Prey)) {
+                            event.getItem().remove();
+                            event.setCancelled(true);
+                        }
+                    }
+                });
+            }
+        }
     }
 
     @EventHandler

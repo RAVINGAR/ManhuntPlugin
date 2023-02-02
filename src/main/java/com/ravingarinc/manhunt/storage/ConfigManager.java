@@ -54,6 +54,7 @@ public class ConfigManager extends Module {
                 }
                 queueManager.setGameWorld(world);
             });
+            wrap("compass-update-interval", child::getLong).ifPresent(gameplayManager::setCompassInterval);
             wrap("max-hunters", child::getInt).ifPresent(gameplayManager::setMaxHunters);
             wrap("prey-lives", child::getInt).ifPresent(gameplayManager::setMaxLives);
             wrap("hunter-min-spawn-range", child::getInt).ifPresent(queueManager::setMinSpawnRange);

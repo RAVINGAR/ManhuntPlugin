@@ -3,6 +3,7 @@ package com.ravingarinc.manhunt.queue;
 import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
+import com.ravingarinc.manhunt.gameplay.CompassUtil;
 import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
 import com.ravingarinc.manhunt.gameplay.Prey;
@@ -17,11 +18,13 @@ import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -46,6 +49,8 @@ public class GameplayManager extends Module {
 
     private int maxLives = 5;
 
+    private long compassInterval;
+
     private World world = null;
 
     private QueueRunner queueChecker;
@@ -53,12 +58,19 @@ public class GameplayManager extends Module {
     private String youtubeLink = "";
     private String twitchLink = "";
 
+    private BukkitRunnable compassChecker;
+
     public GameplayManager(final RavinPlugin plugin) {
         super(GameplayManager.class, plugin, PlayerManager.class, QueueManager.class);
         maxHunters = 5;
         respawningPlayers = new HashSet<>();
         currentHunters = new HashSet<>();
         random = new Random(System.currentTimeMillis());
+    }
+
+
+    public long getCompassIntervalSeconds() {
+        return compassInterval / 20L;
     }
 
     public void setYoutubeLink(final String youtube) {
@@ -89,6 +101,10 @@ public class GameplayManager extends Module {
         this.attemptCooldown = TimeUnit.SECONDS.convert(attemptCooldown, timeUnit);
     }
 
+    public void setCompassInterval(final long intervalSeconds) {
+        this.compassInterval = intervalSeconds * 20L;
+    }
+
     @Override
     protected void load() throws ModuleLoadException {
         manager = plugin.getModule(PlayerManager.class);
@@ -115,6 +131,24 @@ public class GameplayManager extends Module {
             currentHunters.clear();
         }
         currentHunters = newSet;
+
+        compassChecker = new CompassChecker(this, currentHunters, currentPrey);
+
+        compassChecker.runTaskTimer(plugin, 10L, compassInterval);
+    }
+
+    public NamespacedKey getKey() {
+        return new NamespacedKey(plugin, "manhunt");
+    }
+
+    @Nullable
+    public Hunter getAnyHunter() {
+        return currentHunters.stream().findAny().orElse(null);
+    }
+
+    @Nullable
+    public Prey getAnyPrey() {
+        return currentPrey.stream().findAny().orElse(null);
     }
 
     public void sendSupportMessage(final Player player) {
@@ -161,6 +195,7 @@ public class GameplayManager extends Module {
                 }
             } else {
                 currentPrey.add(prey);
+                prey.player().getInventory().addItem(CompassUtil.createPreyCompass(this, prey));
             }
         }
     }
@@ -174,12 +209,12 @@ public class GameplayManager extends Module {
                 final long minutes = TimeUnit.MINUTES.convert(seconds, TimeUnit.SECONDS);
                 if (minutes >= 60) {
                     final long hours = TimeUnit.HOURS.convert(minutes, TimeUnit.MINUTES);
-                    message = hours + (hours == 1 ? "hour" : "hours");
+                    message = hours + (hours == 1 ? " hour" : " hours");
                 } else {
-                    message = minutes + (minutes == 1 ? "minute" : "minutes");
+                    message = minutes + (minutes == 1 ? " minute" : " minutes");
                 }
             } else {
-                message = seconds + (seconds == 1 ? "second" : "seconds");
+                message = seconds + (seconds == 1 ? " second" : " seconds");
             }
             hunter.player().sendMessage(ChatColor.RED + "You did not join the queue as you have played as a hunter too recently! You must wait an additional " + message);
             return true;
@@ -250,6 +285,8 @@ public class GameplayManager extends Module {
             currentPrey.remove(prey);
             queue.cancelFuture(prey.player().getUniqueId());
         }
+
+        CompassUtil.removeCompass(this, trackable.player());
     }
 
     public List<String> getCurrentPrey() {
@@ -261,6 +298,7 @@ public class GameplayManager extends Module {
     public void acceptCallback(final Hunter hunter) {
         if (queue.tryAcceptCallback(hunter)) {
             hunter.start();
+            hunter.player().getInventory().addItem(CompassUtil.createHunterCompass(this));
             currentHunters.add(hunter);
         }
     }
@@ -282,9 +320,9 @@ public class GameplayManager extends Module {
         manager.getPlayers().forEach(trackable -> {
             if (trackable instanceof Prey prey) {
                 currentPrey.add(prey);
+                queue.addPreySpawn(prey);
             }
         });
-        currentPrey.forEach(prey -> queue.addPreySpawn(prey));
     }
 
     public void startQueue() {
@@ -371,6 +409,10 @@ public class GameplayManager extends Module {
         if (queueChecker != null) {
             queueChecker.cancel();
             queueChecker = null;
+        }
+        if (compassChecker != null) {
+            compassChecker.cancel();
+            compassChecker = null;
         }
     }
 

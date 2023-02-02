@@ -41,13 +41,14 @@ public class ManhuntCommand extends BaseCommand {
                                     queue.removeIgnore(hunter);
                                     manager.tryJoin(hunter);
                                 }
+                                sender.sendMessage(ChatColor.GREEN + "Reset the last attempt of that player!");
                             } else {
                                 sender.sendMessage(ChatColor.RED + "That player is not a hunter!");
                             }
                         }, () -> sender.sendMessage(ChatColor.RED + "Could not find that player!"));
                     }
                     return true;
-                })
+                }).getParent()
                 .addOption("spawn-all-prey",
                         "- Teleports all prey to the configured spawn location. " +
                                 "This teleports them regardless of where they are on the server.", 2, (sender, args) -> {

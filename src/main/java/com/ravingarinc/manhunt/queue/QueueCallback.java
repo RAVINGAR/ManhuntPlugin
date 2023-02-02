@@ -36,18 +36,18 @@ public class QueueCallback extends BukkitRunnable {
 
     public void ask() {
         final Player player = hunter.player();
-        player.sendTitle(ChatColor.DARK_GREEN + "Position available!", "A new hunter position is available", 10, 60, 20);
-        final ComponentBuilder builder = new ComponentBuilder(ChatColor.GRAY + "A new hunter position is available! Click ");
+        player.sendTitle(ChatColor.DARK_GREEN + "Position Available!", "A new hunter position is available", 10, 60, 20);
+        final ComponentBuilder builder = new ComponentBuilder(ChatColor.WHITE + "A new hunter position is available! Click ");
         builder.append(ChatColor.GREEN + "[Accept]")
                 .event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/mh accept"))
                 .event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Accept your position and join the hunt!")))
-                .append(ChatColor.GRAY + " or ")
+                .append(ChatColor.WHITE + " or ")
                 .event((ClickEvent) null)
                 .event((HoverEvent) null)
                 .append(ChatColor.RED + "[Decline]")
                 .event(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/mh decline"))
                 .event(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(ChatColor.GRAY + "Decline the position and give the chance to the next player in queue!")))
-                .append(ChatColor.GRAY + " within " + timeout + " seconds to make your choice!")
+                .append(ChatColor.WHITE + " within " + timeout + " seconds to make your choice!")
                 .event((ClickEvent) null)
                 .event((HoverEvent) null);
         player.spigot().sendMessage(builder.create());

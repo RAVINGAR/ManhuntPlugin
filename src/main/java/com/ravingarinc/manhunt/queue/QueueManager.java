@@ -4,6 +4,7 @@ import com.ravingarinc.manhunt.RavinPlugin;
 import com.ravingarinc.manhunt.api.Module;
 import com.ravingarinc.manhunt.api.ModuleLoadException;
 import com.ravingarinc.manhunt.api.util.I;
+import com.ravingarinc.manhunt.gameplay.CompassUtil;
 import com.ravingarinc.manhunt.gameplay.Hunter;
 import com.ravingarinc.manhunt.gameplay.PlayerManager;
 import com.ravingarinc.manhunt.gameplay.Prey;
@@ -48,6 +49,8 @@ public class QueueManager extends Module {
 
     private World gameplayWorld;
 
+    private GameplayManager gameplayManager;
+
     public QueueManager(final RavinPlugin plugin) {
         super(QueueManager.class, plugin, PlayerManager.class);
         callbacks = new ConcurrentHashMap<>();
@@ -81,6 +84,7 @@ public class QueueManager extends Module {
     @Override
     protected void load() throws ModuleLoadException {
         manager = plugin.getModule(PlayerManager.class);
+        gameplayManager = plugin.getModule(GameplayManager.class);
 
         final Set<Hunter> newIgnores = new HashSet<>();
         if (ignoringHunters != null) {
@@ -252,6 +256,7 @@ public class QueueManager extends Module {
                     final Location location = future.get(1000, TimeUnit.MILLISECONDS);
                     player.setGameMode(GameMode.SURVIVAL);
                     player.teleport(location);
+                    prey.player().getInventory().addItem(CompassUtil.createPreyCompass(gameplayManager, prey));
                 }
             } catch (ExecutionException | InterruptedException | TimeoutException e) {
                 I.log(Level.SEVERE, "Could not find suitable spawn location for prey!", e);

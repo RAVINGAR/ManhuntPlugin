@@ -18,9 +18,12 @@ gameplay:
   hunter-max-spawn-range: 2500
   # Where are prey spawned after a game is started, format is x, z.
   prey-spawn-location: 0,0
+  # The world where the prey will spawn
   prey-spawn-world: 'World'
   # The world where all the lobby is present.
   spawn-world-name: 'World'
+  # The interval at which the hunter's/prey's compass is updated with their target's location. This is in seconds
+  compass-update-interval: 60
 queue:
   # If any prey join that have not played before, automatically teleport them to the given spawn.
   # Practically speaking, if you reset the LuckPerms database, then the plugin will assume that any prey that join
